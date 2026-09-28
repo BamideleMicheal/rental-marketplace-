@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rental Marketplace</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Rental Marketplace</div>
+  <nav>
+    <button class="nav-btn active" data-section="explore">Explore</button>
+    <button class="nav-btn" data-section="dashboard">Dashboard</button>
+    <button class="nav-btn" data-section="list">List an Item</button>
+    <button class="nav-btn" data-section="account">Account</button>
+  </nav>
+  <button id="logoutBtn" class="ghost hidden">Logout</button>
+</header>
+
+<main>
+<section id="explore" class="app-section active-section">
+  <div class="hero">
+    <h1>Rent what you need. Share what you own.</h1>
+    <p>A Nigeria-focused peer-to-peer rental marketplace.</p>
+  </div>
+  <div class="toolbar">
+    <input id="search" placeholder="Search rentals...">
+    <select id="stateFilter"><option value="">All states</option></select>
+    <div class="filters">
+      <button class="filter active" data-category="All">All</button>
+      <button class="filter" data-category="Tools">Tools</button>
+      <button class="filter" data-category="Events">Events</button>
+      <button class="filter" data-category="Equipment">Equipment</button>
+      <button class="filter" data-category="Home">Home</button>
+    </div>
+  </div>
+  <div id="listing-grid" class="grid"></div>
+</section>
+
+<section id="dashboard" class="app-section">
+  <div class="panel">
+    <h2>Dashboard</h2>
+    <p id="whoami">Sign in to see your bookings.</p>
+    <div id="bookingSummary"></div><div id="escrowSummary"></div>
+  </div>
+</section>
+
+<section id="list" class="app-section">
+  <form id="listing-form" class="panel form-grid">
+    <h2>List an Item</h2>
+    <input name="name" required placeholder="Item name">
+    <input name="category" required placeholder="Category">
+    <input name="price" required type="number" min="0" placeholder="Daily price (NGN)">
+    <input name="deposit" type="number" min="0" value="0" placeholder="Deposit (NGN)">
+    <input name="country" value="Nigeria" readonly>
+    <select name="state" id="listingState" class="state-select" required></select>
+    <input name="city" required placeholder="City">
+    <input name="area" required placeholder="Area / neighborhood">
+    <input name="image" id="imageUrl" required placeholder="Image URL or upload result">
+    <textarea name="description" required placeholder="Description"></textarea>
+    <button type="submit">Submit Listing</button>
+  </form>
+  <form id="uploadForm" class="panel">
+    <h3>Upload image</h3>
+    <input name="image" type="file" accept="image/jpeg,image/png,image/webp" required>
+    <button type="submit">Upload</button>
+  </form>
+</section>
+
+<section id="account" class="app-section">
+  <div class="two-col">
+    <form id="loginForm" class="panel form-grid">
+      <h2>Login</h2>
+      <input name="email" type="email" required placeholder="Email">
+      <input name="password" type="password" required placeholder="Password">
+      <button>Login</button>
+    </form>
+    <form id="signupForm" class="panel form-grid">
+      <h2>Create account</h2>
+      <input name="name" required placeholder="Full name">
+      <input name="email" type="email" required placeholder="Email">
+      <input name="password" type="password" minlength="8" required placeholder="Password (8+ characters)">
+      <select name="role"><option value="member">Renter</option><option value="lender">Lender</option></select>
+      <button>Create account</button>
+    </form>
+  </div>
+</section>
+</main>
+<div id="toast" class="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
