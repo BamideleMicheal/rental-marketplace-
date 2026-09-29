@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { Pool } = require('pg');
+const email = require('./email');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -97,6 +98,10 @@ function validDate(s) {
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYMENT_PROVIDER = PAYSTACK_SECRET_KEY ? 'paystack' : 'manual';
 
+function notify(promise) {
+  Promise.resolve(promise).catch(err => console.error('Email notification failed:', err.message));
+}
+
 async function paystack(pathname, body, method = 'POST') {
   if (!PAYSTACK_SECRET_KEY) throw new Error('PAYSTACK_SECRET_KEY is not configured.');
   const response = await fetch(`https://api.paystack.co${pathname}`, {
@@ -149,6 +154,7 @@ app.post('/api/auth/register', async (req, res) => {
       [String(name).trim(), String(email).trim().toLowerCase(), hash, salt, safeRole]
     );
     const user = safeUser(result.rows[0]);
+    notify(email.welcome(user));
     res.status(201).json({ user, token: tokenFor(user) });
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'An account with that email already exists.' });
@@ -264,7 +270,19 @@ app.post('/api/bookings', auth, async (req, res) => {
       `INSERT INTO bookings(listing_id,renter_id,start_date,end_date,total,status)
        VALUES($1,$2,$3,$4,$5,'pending') RETURNING *`,
       [listingId, req.user.id, startDate, endDate, total]);
+    const contacts = await client.query(
+      `SELECT l.name AS item, renter.name AS renter_name, renter.email AS renter_email,
+              lender.name AS lender_name, lender.email AS lender_email
+         FROM listings l
+         JOIN users renter ON renter.id=$2
+         JOIN users lender ON lender.id=l.owner_id
+        WHERE l.id=$1`, [listingId, req.user.id]);
     await client.query('COMMIT');
+    if (contacts.rowCount) {
+      const x = contacts.rows[0];
+      notify(email.bookingCreated({to:x.renter_email,name:x.renter_name,item:x.item,startDate,endDate,total}));
+      notify(email.bookingReceived({to:x.lender_email,name:x.lender_name,item:x.item,startDate,endDate,total}));
+    }
     res.status(201).json(booking.rows[0]);
   } catch (e) {
     await client.query('ROLLBACK');
@@ -425,6 +443,11 @@ app.post('/api/payments/verify', auth, async (req, res) => {
       `UPDATE bookings SET status='confirmed'
         WHERE id=$1 AND status='pending'`, [escrow.rows[0].booking_id]);
 
+    const contacts = await pool.query(
+      `SELECT l.name AS item,r.name AS renter_name,r.email AS renter_email
+         FROM bookings b JOIN listings l ON l.id=b.listing_id
+         JOIN users r ON r.id=b.renter_id WHERE b.id=$1`, [escrow.rows[0].booking_id]);
+    if (contacts.rowCount) notify(email.paymentConfirmed({to:contacts.rows[0].renter_email,name:contacts.rows[0].renter_name,item:contacts.rows[0].item,total:updated.rows[0].amount}));
     res.json({ paid: true, escrow: updated.rows[0] });
   } catch (e) {
     res.status(502).json({ error: e.message });
@@ -457,6 +480,11 @@ app.post('/api/payments/webhook', async (req, res) => {
       await pool.query(
         `UPDATE bookings SET status='confirmed' WHERE id=$1 AND status='pending'`,
         [result.rows[0].booking_id]);
+      const contacts = await pool.query(
+        `SELECT l.name AS item,r.name AS renter_name,r.email AS renter_email
+           FROM bookings b JOIN listings l ON l.id=b.listing_id
+           JOIN users r ON r.id=b.renter_id WHERE b.id=$1`, [result.rows[0].booking_id]);
+      if (contacts.rowCount) notify(email.paymentConfirmed({to:contacts.rows[0].renter_email,name:contacts.rows[0].renter_name,item:contacts.rows[0].item,total:event.data.amount/100}));
     }
   }
   res.sendStatus(200);
@@ -509,6 +537,20 @@ app.post('/api/escrow/dispute', auth, async (req, res) => {
      VALUES($1,$2,(SELECT listing_id FROM bookings WHERE id=$1),$3,$4)
      RETURNING *`,
     [result.rows[0].booking_id,req.user.id,reason,details]);
+  const parties = await pool.query(
+    `SELECT l.name AS item, renter.name AS renter_name, renter.email AS renter_email,
+            lender.name AS lender_name, lender.email AS lender_email
+       FROM bookings b
+       JOIN listings l ON l.id=b.listing_id
+       JOIN users renter ON renter.id=b.renter_id
+       JOIN users lender ON lender.id=l.owner_id
+      WHERE b.id=$1`, [result.rows[0].booking_id]);
+  if (parties.rowCount) {
+    const x = parties.rows[0];
+    const recipient = Number(req.user.id) === Number(result.rows[0].owner_id) ?
+      {to:x.renter_email,name:x.renter_name} : {to:x.lender_email,name:x.lender_name};
+    notify(email.disputeCreated({to:recipient.to,name:recipient.name,item:x.item,reason}));
+  }
   res.status(201).json({ dispute: dispute.rows[0] });
 });
 
@@ -518,12 +560,15 @@ app.get('/api/admin/overview',auth,requireRole('admin'),async(_q,res)=>{ const [
 app.get('/api/admin/users',auth,requireRole('admin'),async(_q,res)=>res.json((await pool.query('SELECT id,name,email,role,created_at FROM users ORDER BY created_at DESC')).rows));
 app.post('/api/admin/users/:id/role',auth,requireRole('admin'),async(req,res)=>{const {role}=req.body||{};if(!['member','lender','admin'].includes(role))return res.status(400).json({error:'Invalid role.'});if(Number(req.params.id)===Number(req.user.id)&&role!=='admin')return res.status(400).json({error:'You cannot remove your own admin role.'});const r=await pool.query('UPDATE users SET role=$1 WHERE id=$2 RETURNING id,name,email,role',[role,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'User not found.'});res.json(r.rows[0]);});
 app.get('/api/admin/listings',auth,requireRole('admin'),async(req,res)=>{const p=[],w=[];if(req.query.status&&['pending-review','active','rejected','suspended'].includes(req.query.status)){p.push(req.query.status);w.push('l.status=$1')}const sql='SELECT l.*,u.name owner_name,u.email owner_email FROM listings l JOIN users u ON u.id=l.owner_id '+(w.length?'WHERE '+w.join(' AND '):'')+' ORDER BY l.created_at DESC';res.json((await pool.query(sql,p)).rows);});
-app.post('/api/admin/listings/:id/status',auth,requireRole('admin'),async(req,res)=>{const {status}=req.body||{};if(!['pending-review','active','rejected','suspended'].includes(status))return res.status(400).json({error:'Invalid listing status.'});const r=await pool.query('UPDATE listings SET status=$1 WHERE id=$2 RETURNING *',[status,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Listing not found.'});res.json(r.rows[0]);});
+app.post('/api/admin/listings/:id/status',auth,requireRole('admin'),async(req,res)=>{const {status}=req.body||{};if(!['pending-review','active','rejected','suspended'].includes(status))return res.status(400).json({error:'Invalid listing status.'});const r=await pool.query('UPDATE listings SET status=$1 WHERE id=$2 RETURNING *',[status,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Listing not found.'});const owner=await pool.query('SELECT u.name,u.email,l.name AS item FROM listings l JOIN users u ON u.id=l.owner_id WHERE l.id=$1',[req.params.id]);if(owner.rowCount)notify(email.listingStatus({to:owner.rows[0].email,name:owner.rows[0].name,item:owner.rows[0].item,status}));res.json(r.rows[0]);});
 app.get('/api/admin/bookings',auth,requireRole('admin'),async(_q,res)=>res.json((await pool.query('SELECT b.*,l.name listing_name,u.name renter_name,owner.name lender_name FROM bookings b JOIN listings l ON l.id=b.listing_id JOIN users u ON u.id=b.renter_id JOIN users owner ON owner.id=l.owner_id ORDER BY b.created_at DESC')).rows));
 app.post('/api/admin/bookings/:id/status',auth,requireRole('admin'),async(req,res)=>{const {status}=req.body||{};if(!['pending','confirmed','cancelled','completed','rejected'].includes(status))return res.status(400).json({error:'Invalid booking status.'});const r=await pool.query('UPDATE bookings SET status=$1 WHERE id=$2 RETURNING *',[status,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Booking not found.'});res.json(r.rows[0]);});
 app.get('/api/admin/escrow',auth,requireRole('admin'),async(_q,res)=>res.json((await pool.query('SELECT e.*,l.name listing_name,r.name renter_name,o.name lender_name FROM escrow_transactions e JOIN bookings b ON b.id=e.booking_id JOIN listings l ON l.id=b.listing_id JOIN users r ON r.id=b.renter_id JOIN users o ON o.id=l.owner_id ORDER BY e.created_at DESC')).rows));
 app.get('/api/admin/payouts',auth,requireRole('admin'),async(_q,res)=>res.json((await pool.query('SELECT p.*,u.name lender_name,l.name listing_name FROM payouts p JOIN users u ON u.id=p.lender_id LEFT JOIN bookings b ON b.id=p.booking_id LEFT JOIN listings l ON l.id=b.listing_id ORDER BY p.created_at DESC')).rows));
-app.post('/api/admin/payouts/:id/status',auth,requireRole('admin'),async(req,res)=>{const {status}=req.body||{};if(!['pending','paid','failed'].includes(status))return res.status(400).json({error:'Invalid payout status.'});const r=await pool.query('UPDATE payouts SET status=$1 WHERE id=$2 RETURNING *',[status,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Payout not found.'});res.json(r.rows[0]);});
+app.post('/api/admin/payouts/:id/status',auth,requireRole('admin'),async(req,res)=>{const {status}=req.body||{};if(!['pending','paid','failed'].includes(status))return res.status(400).json({error:'Invalid payout status.'});const r=await pool.query('UPDATE payouts SET status=$1 WHERE id=$2 RETURNING *',[status,req.params.id]);if(!r.rowCount)return res.status(404).json({error:'Payout not found.'});const owner=await pool.query('SELECT u.name,u.email,p.amount FROM payouts p JOIN users u ON u.id=p.lender_id WHERE p.id=$1',[req.params.id]);if(owner.rowCount)notify(email.payoutStatus({to:owner.rows[0].email,name:owner.rows[0].name,amount:owner.rows[0].amount,status}));res.json(r.rows[0]);});
+
+app.get('/api/notifications/status', auth, async (req,res)=>{ res.json({configured:Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM), provider:'Resend'}); });
+app.post('/api/notifications/test', auth, requireRole('admin'), async (req,res)=>{ const to=String(req.body?.to||'').trim().toLowerCase(); if(!to)return res.status(400).json({error:'Recipient email is required.'}); try { const result=await email.sendEmail({to,subject:'Rental Marketplace email test',html:'<p>Email notifications are configured and working.</p>',text:'Rental Marketplace email notifications are configured and working.'}); res.json(result); } catch(e) { res.status(502).json({error:e.message}); } });
 
 app.use((err, _req, res, _next) => {
   console.error(err);
