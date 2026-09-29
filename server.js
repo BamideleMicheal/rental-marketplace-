@@ -379,6 +379,7 @@ app.post('/api/escrow/authorize', auth, async (req, res) => {
       amount: Math.round(Number(b.total) * 100),
       currency: 'NGN',
       reference,
+      callback_url: process.env.APP_URL ? `${process.env.APP_URL}/?payment_reference=${encodeURIComponent(reference)}` : undefined,
       metadata: { booking_id: String(b.id), escrow_id: String(escrow.id) }
     });
 
