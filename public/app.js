@@ -32,6 +32,11 @@ async function restore(){
   catch{localStorage.removeItem(tokenKey)}
 }
 
+async function handlePaymentReturn(){
+  const reference=new URLSearchParams(location.search).get('payment_reference');
+  if(!reference||!state.user)return;
+  try{const r=await api('/api/payments/verify',{method:'POST',body:{reference}});toast(r.paid?'Payment confirmed.':'Payment was not confirmed.');history.replaceState({},document.title,location.pathname)}catch(e){toast(e.message)}
+}
 async function loadEscrow(){
   if(!state.user)return;
   try{
@@ -62,4 +67,4 @@ async function listItem(e){e.preventDefault();try{await api('/api/listings',{met
 async function upload(e){e.preventDefault();try{const r=await api('/api/uploads',{method:'POST',body:new FormData(e.target)});$('#imageUrl').value=r.url;toast('Image uploaded')}catch(x){toast(x.message)}}
 async function reserve(e){const b=e.target.closest('.reserve');if(!b)return;if(!state.user){toast('Please log in before reserving.');return}const startDate=prompt('Start date (YYYY-MM-DD)');const endDate=prompt('End date (YYYY-MM-DD)');if(!startDate||!endDate)return;try{await api('/api/bookings',{method:'POST',body:{listingId:b.dataset.id,startDate,endDate}});toast('Booking request created');await loadBookings();section('dashboard')}catch(x){toast(x.message)}}
 $('#bookingSummary').onclick=e=>{const b=e.target.closest('.pay-booking');if(b)startEscrow(b.dataset.id)};
-document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>section(b.dataset.section));document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.category=b.dataset.category;refresh()});$('#search').oninput=refresh;$('#stateFilter').onchange=refresh;$('#listing-grid').onclick=reserve;$('#loginForm').onsubmit=login;$('#signupForm').onsubmit=signup;$('#listing-form').onsubmit=listItem;$('#uploadForm').onsubmit=upload;$('#logoutBtn').onclick=()=>{localStorage.removeItem(tokenKey);location.reload()};try{await loadLocations();await restore();await refresh()}catch(e){toast(e.message)}});
+document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>section(b.dataset.section));document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.category=b.dataset.category;refresh()});$('#search').oninput=refresh;$('#stateFilter').onchange=refresh;$('#listing-grid').onclick=reserve;$('#loginForm').onsubmit=login;$('#signupForm').onsubmit=signup;$('#listing-form').onsubmit=listItem;$('#uploadForm').onsubmit=upload;$('#logoutBtn').onclick=()=>{localStorage.removeItem(tokenKey);location.reload()};try{await loadLocations();await restore();await refresh();await handlePaymentReturn()}catch(e){toast(e.message)}});
