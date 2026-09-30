@@ -50,7 +50,7 @@
   <div class="panel">
     <h2>Dashboard</h2>
     <p id="whoami">Sign in to see your bookings.</p>
-    <div id="bookingSummary"></div><div id="escrowSummary"></div>
+    <div id="reputationSummary" class="panel"><h3>My Renter Reputation</h3><div id="reputationContent">Loading...</div></div><div id="bookingSummary"></div><div id="escrowSummary"></div><div id="reviewPanel" class="panel hidden"><h3>Review a completed rental</h3><form id="reviewForm" class="form-grid"><input type="hidden" name="bookingId"><div id="reviewItem"></div><label>Rating <select name="rating" required><option value="">Select 1–5</option><option value="5">★★★★★ 5</option><option value="4">★★★★☆ 4</option><option value="3">★★★☆☆ 3</option><option value="2">★★☆☆☆ 2</option><option value="1">★☆☆☆☆ 1</option></select></label><textarea name="comment" maxlength="2000" placeholder="Describe your experience with the renter and the item..."></textarea><button type="submit">Submit review</button></form></div>
   </div>
 </section>
 
