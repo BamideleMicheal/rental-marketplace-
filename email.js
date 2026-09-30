@@ -109,6 +109,24 @@ function payoutStatus({to,name,amount,status}) {
   });
 }
 
+function rentalStartReminder({to,name,item,startDate,endDate}) {
+  return sendEmail({
+    to,
+    subject:'Rental starts today',
+    html:layout('Rental starts today',`<p>Hello ${escapeHtml(name)},</p><p>Your rental for <strong>${escapeHtml(item)}</strong> starts today.</p><p>Rental period: ${escapeHtml(startDate)} to ${escapeHtml(endDate)}.</p>`),
+    text:`Your rental for ${item} starts today. Rental period: ${startDate} to ${endDate}.`
+  });
+}
+
+function returnReminder({to,name,item,endDate}) {
+  return sendEmail({
+    to,
+    subject:'Rental return reminder',
+    html:layout('Return reminder',`<p>Hello ${escapeHtml(name)},</p><p>This is a reminder that <strong>${escapeHtml(item)}</strong> is due for return tomorrow.</p><p>Return date: ${escapeHtml(endDate)}.</p>`),
+    text:`Reminder: ${item} is due for return tomorrow, ${endDate}.`
+  });
+}
+
 module.exports = {
   sendEmail,
   welcome,
@@ -117,5 +135,7 @@ module.exports = {
   paymentConfirmed,
   disputeCreated,
   listingStatus,
-  payoutStatus
+  payoutStatus,
+  rentalStartReminder,
+  returnReminder
 };
