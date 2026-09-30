@@ -73,18 +73,49 @@ function renderCart(){
     <label class="cart-address">Address <input class="cart-address-input" data-id="${c.id}" value="${esc(c.delivery_address||'')}" placeholder="Delivery address"></label></div>
     <div class="cart-actions"><button class="save-cart" data-id="${c.id}">Update</button><button class="remove-cart ghost" data-id="${c.id}">Remove</button></div></div></div>`).join('');
 }
+async function loadReputation(){
+  if(!state.user)return;
+  try{
+    const r=await api('/api/users/'+state.user.id+'/reviews');
+    const s=r.summary||{average_rating:0,review_count:0};
+    $('#reputationContent').innerHTML=
+      '<strong>★ '+esc(s.average_rating||0)+'/5</strong> · '+esc(s.review_count||0)+' verified review(s)' +
+      (r.reviews?.length ? '<div class="review-list">'+r.reviews.slice(0,5).map(v=>'<div class="review-card"><div><strong>'+esc(v.reviewer_name)+'</strong> · '+('★'.repeat(Number(v.rating)))+'</div><small>'+esc(v.listing_name)+' · '+String(v.created_at).slice(0,10)+'</small><p>'+esc(v.comment||'No written comment.')+'</p></div>').join('')+'</div>' : '<p>No reviews yet.</p>');
+  }catch(e){toast(e.message)}
+}
+async function openReview(bookingId){
+  try{
+    const r=await api('/api/bookings/'+bookingId+'/review');
+    const b=state.bookings.find(x=>String(x.id)===String(bookingId));
+    if(!b)return;
+    if(r.review){toast('You already reviewed this rental.');return;}
+    $('#reviewPanel').classList.remove('hidden');
+    $('#reviewForm [name="bookingId"]').value=bookingId;
+    $('#reviewItem').textContent='Rental: '+b.item+' · '+b.start_date+' → '+b.end_date;
+    section('dashboard');
+    window.scrollTo({top:document.querySelector('#reviewPanel').offsetTop,behavior:'smooth'});
+  }catch(e){toast(e.message)}
+}
+async function submitReview(e){
+  e.preventDefault();
+  try{
+    const data=Object.fromEntries(new FormData(e.target));
+    await api('/api/reviews',{method:'POST',body:{bookingId:Number(data.bookingId),rating:Number(data.rating),comment:data.comment}});
+    e.target.reset();$('#reviewPanel').classList.add('hidden');toast('Review submitted');await loadBookings();await loadReputation();
+  }catch(x){toast(x.message)}
+}
 async function loadBookings(){
   if(!state.user)return;
-  try{state.bookings=await api('/api/bookings');$('#bookingSummary').innerHTML=state.bookings.length?state.bookings.map(b=>`<div class="booking-row"><div><strong>${esc(b.item)}</strong><small>${b.start_date} → ${b.end_date} · ${esc(b.status)}</small></div><span>${money(b.total)}${b.status==='pending'?` <button class="pay-booking" data-id="${b.id}">Pay</button>`:''}</span></div>`).join(''):'<p>No bookings yet.</p>'}
+  try{state.bookings=await api('/api/bookings');$('#bookingSummary').innerHTML=state.bookings.length?state.bookings.map(b=>`<div class="booking-row"><div><strong>${esc(b.item)}</strong><small>${b.start_date} → ${b.end_date} · ${esc(b.status)}</small></div><span>${money(b.total)}${b.status==='pending'?` <button class="pay-booking" data-id="${b.id}">Pay</button>`:''}${b.status==='completed'?` <button class="review-booking" data-id="${b.id}">Review renter</button>`:''}</span></div>`).join(''):'<p>No bookings yet.</p>'}
   catch(e){toast(e.message)}
 }
-async function login(e){e.preventDefault();try{const r=await api('/api/auth/login',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Login successful');section('dashboard');await loadBookings();await loadCart();await loadEscrow()}catch(x){toast(x.message)}}
+async function login(e){e.preventDefault();try{const r=await api('/api/auth/login',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Login successful');section('dashboard');await loadBookings();await loadCart();await loadEscrow();await loadReputation()}catch(x){toast(x.message)}}
 async function signup(e){e.preventDefault();try{const r=await api('/api/auth/register',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Account created');section('dashboard')}catch(x){toast(x.message)}}
 async function listItem(e){e.preventDefault();try{await api('/api/listings',{method:'POST',body:Object.fromEntries(new FormData(e.target))});toast('Listing submitted for review');e.target.reset()}catch(x){toast(x.message)}}
 async function upload(e){e.preventDefault();try{const r=await api('/api/uploads',{method:'POST',body:new FormData(e.target)});$('#imageUrl').value=r.url;toast('Image uploaded')}catch(x){toast(x.message)}}
 async function reserve(e){const b=e.target.closest('.add-cart');if(!b)return;if(!state.user){toast('Please log in before reserving.');return}const startDate=prompt('Start date (YYYY-MM-DD)');const endDate=prompt('End date (YYYY-MM-DD)');if(!startDate||!endDate)return;const deliveryMethod=(prompt('Delivery: self-pickup, delivery-return, or delivery-only','self-pickup')||'self-pickup').trim();let deliveryAddress='';if(deliveryMethod!=='self-pickup')deliveryAddress=prompt('Delivery address')||'';try{await api('/api/cart',{method:'POST',body:{listingId:b.dataset.id,startDate,endDate,deliveryMethod,deliveryAddress}});toast('Added to cart');await loadCart();}catch(x){toast(x.message)}}catch(x){toast(x.message)}}
-$('#bookingSummary').onclick=e=>{const b=e.target.closest('.pay-booking');if(b)startEscrow(b.dataset.id)};
-document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>section(b.dataset.section));$('#cartNav').onclick=()=>{section('cart');loadCart()};$('#cartItems').onclick=cartActions;$('#cartCheckout').onclick=checkoutCart;document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.category=b.dataset.category;refresh()});$('#search').oninput=refresh;$('#stateFilter').onchange=refresh;$('#listing-grid').onclick=reserve;$('#loginForm').onsubmit=login;$('#signupForm').onsubmit=signup;$('#listing-form').onsubmit=listItem;$('#uploadForm').onsubmit=upload;$('#logoutBtn').onclick=()=>{localStorage.removeItem(tokenKey);location.reload()};try{await loadLocations();await restore();await refresh();await handlePaymentReturn()}catch(e){toast(e.message)}});
+$('#bookingSummary').onclick=e=>{const b=e.target.closest('.pay-booking');if(b)startEscrow(b.dataset.id);const r=e.target.closest('.review-booking');if(r)openReview(r.dataset.id)};
+document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>section(b.dataset.section));$('#cartNav').onclick=()=>{section('cart');loadCart()};$('#cartItems').onclick=cartActions;$('#cartCheckout').onclick=checkoutCart;document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.category=b.dataset.category;refresh()});$('#search').oninput=refresh;$('#stateFilter').onchange=refresh;$('#listing-grid').onclick=reserve;$('#loginForm').onsubmit=login;$('#reviewForm').onsubmit=submitReview;$('#signupForm').onsubmit=signup;$('#listing-form').onsubmit=listItem;$('#uploadForm').onsubmit=upload;$('#logoutBtn').onclick=()=>{localStorage.removeItem(tokenKey);location.reload()};try{await loadLocations();await restore();await refresh();await handlePaymentReturn()}catch(e){toast(e.message)}});
 
 async function cartActions(e){
   const save=e.target.closest('.save-cart'), remove=e.target.closest('.remove-cart');
