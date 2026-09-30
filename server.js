@@ -130,6 +130,41 @@ function verifyPaystackSignature(req) {
     crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
+async function runDueRentalNotifications() {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+  const tomorrow = new Date(Date.now() + 24*60*60*1000).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+  const result = await pool.query(`
+    SELECT b.id,b.start_date,b.end_date,l.name AS item,
+           renter.name AS renter_name,renter.email AS renter_email,
+           lender.name AS lender_name,lender.email AS lender_email
+      FROM bookings b
+      JOIN listings l ON l.id=b.listing_id
+      JOIN users renter ON renter.id=b.renter_id
+      JOIN users lender ON lender.id=l.owner_id
+     WHERE b.status='confirmed'
+       AND (b.start_date=$1::date OR b.end_date=$2::date)
+  `,[today,tomorrow]);
+  for(const row of result.rows){
+    if(String(row.start_date).slice(0,10)===today){
+      const r=await pool.query(`INSERT INTO notification_log(booking_id,notification_type)
+        VALUES($1,'rental-start-today') ON CONFLICT(booking_id,notification_type) DO NOTHING RETURNING id`,[row.id]);
+      if(r.rowCount){
+        notify(email.rentalStartReminder({to:row.renter_email,name:row.renter_name,item:row.item,startDate:row.start_date,endDate:row.end_date}));
+        notify(email.rentalStartReminder({to:row.lender_email,name:row.lender_name,item:row.item,startDate:row.start_date,endDate:row.end_date}));
+      }
+    }
+    if(String(row.end_date).slice(0,10)===tomorrow){
+      const r=await pool.query(`INSERT INTO notification_log(booking_id,notification_type)
+        VALUES($1,'return-tomorrow') ON CONFLICT(booking_id,notification_type) DO NOTHING RETURNING id`,[row.id]);
+      if(r.rowCount){
+        notify(email.returnReminder({to:row.renter_email,name:row.renter_name,item:row.item,endDate:row.end_date}));
+        notify(email.returnReminder({to:row.lender_email,name:row.lender_name,item:row.item,endDate:row.end_date}));
+      }
+    }
+  }
+  return {checked:result.rowCount};
+}
+
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
