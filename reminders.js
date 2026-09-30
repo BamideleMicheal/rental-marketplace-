@@ -42,6 +42,7 @@ async function run() {
         notify(email.rentalStartReminder({to:row.lender_email,name:row.lender_name,item:row.item,startDate:row.start_date,endDate:row.end_date}));
       }
     }
+
     if (String(row.end_date).slice(0,10) === tomorrow) {
       const inserted = await pool.query(
         `INSERT INTO notification_log(booking_id,notification_type)
@@ -55,6 +56,7 @@ async function run() {
       }
     }
   }
+
   await pool.end();
   console.log(`Rental reminders processed for ${today}; found ${result.rowCount} matching booking(s).`);
 }
