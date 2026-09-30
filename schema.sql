@@ -132,3 +132,27 @@ CREATE INDEX IF NOT EXISTS carts_user_idx ON carts(user_id);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_method TEXT NOT NULL DEFAULT 'self-pickup';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_address TEXT NOT NULL DEFAULT '';
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (delivery_fee >= 0);
+
+CREATE TABLE IF NOT EXISTS deliveries (
+  id BIGSERIAL PRIMARY KEY,
+  booking_id BIGINT UNIQUE NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  method TEXT NOT NULL CHECK (method IN ('delivery-return','delivery-only')),
+  pickup_address TEXT NOT NULL DEFAULT '',
+  delivery_address TEXT NOT NULL DEFAULT '',
+  courier_name TEXT,
+  courier_phone TEXT,
+  tracking_code TEXT UNIQUE,
+  outbound_status TEXT NOT NULL DEFAULT 'pending',
+  return_status TEXT NOT NULL DEFAULT 'not-required',
+  renter_received_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  renter_received_at TIMESTAMPTZ,
+  renter_return_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  renter_return_at TIMESTAMPTZ,
+  lender_return_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  lender_return_at TIMESTAMPTZ,
+  damage_reported BOOLEAN NOT NULL DEFAULT FALSE,
+  damage_details TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS deliveries_status_idx ON deliveries(outbound_status,return_status);
