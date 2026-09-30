@@ -4,9 +4,10 @@
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node migrate.js && node server.js",
     "dev": "node --watch server.js",
     "db:init": "psql \"$DATABASE_URL\" -f schema.sql",
+    "db:migrate": "node migrate.js",
     "reminders": "node reminders.js"
   },
   "dependencies": {
