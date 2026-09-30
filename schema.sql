@@ -111,3 +111,24 @@ ALTER TABLE escrow_transactions ADD COLUMN IF NOT EXISTS released_at TIMESTAMPTZ
 ALTER TABLE escrow_transactions ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS escrow_provider_reference_uq
   ON escrow_transactions(provider_reference) WHERE provider_reference IS NOT NULL;
+
+
+-- Persistent shopping cart and per-item rental dates
+CREATE TABLE IF NOT EXISTS carts (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id BIGINT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  delivery_method TEXT NOT NULL DEFAULT 'self-pickup'
+    CHECK (delivery_method IN ('self-pickup','delivery-return','delivery-only')),
+  delivery_address TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, listing_id),
+  CHECK (end_date > start_date)
+);
+CREATE INDEX IF NOT EXISTS carts_user_idx ON carts(user_id);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_method TEXT NOT NULL DEFAULT 'self-pickup';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_address TEXT NOT NULL DEFAULT '';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (delivery_fee >= 0);
