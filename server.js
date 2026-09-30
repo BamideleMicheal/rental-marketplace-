@@ -5,6 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { Pool } = require('pg');
 const email = require('./email');
+const { registerReviewRoutes } = require('./review-routes');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -705,6 +706,8 @@ app.post('/api/admin/payouts/:id/status',auth,requireRole('admin'),async(req,res
 
 app.get('/api/notifications/status', auth, async (req,res)=>{ res.json({configured:Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM), provider:'Resend'}); });
 app.post('/api/notifications/test', auth, requireRole('admin'), async (req,res)=>{ const to=String(req.body?.to||'').trim().toLowerCase(); if(!to)return res.status(400).json({error:'Recipient email is required.'}); try { const result=await email.sendEmail({to,subject:'Rental Marketplace email test',html:'<p>Email notifications are configured and working.</p>',text:'Rental Marketplace email notifications are configured and working.'}); res.json(result); } catch(e) { res.status(502).json({error:e.message}); } });
+
+registerReviewRoutes(app, pool, auth);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
