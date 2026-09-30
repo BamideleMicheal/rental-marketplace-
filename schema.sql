@@ -167,3 +167,20 @@ CREATE TABLE IF NOT EXISTS notification_log (
   UNIQUE(booking_id, notification_type)
 );
 CREATE INDEX IF NOT EXISTS notification_log_booking_idx ON notification_log(booking_id);
+
+
+-- Verified post-rental reviews and renter reputation
+CREATE TABLE IF NOT EXISTS reviews (
+  id BIGSERIAL PRIMARY KEY,
+  booking_id BIGINT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  reviewer_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reviewed_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  listing_id BIGINT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(booking_id, reviewer_id)
+);
+CREATE INDEX IF NOT EXISTS reviews_reviewed_user_idx ON reviews(reviewed_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS reviews_listing_idx ON reviews(listing_id, created_at DESC);
