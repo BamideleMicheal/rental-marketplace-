@@ -104,6 +104,23 @@ async function submitReview(e){
     e.target.reset();$('#reviewPanel').classList.add('hidden');toast('Review submitted');await loadBookings();await loadReputation();
   }catch(x){toast(x.message)}
 }
+async function loadRenterReviews(userId){
+  try{
+    const r=await api('/api/users/'+userId+'/reviews');
+    const summary=r.summary||{average_rating:0,review_count:0};
+    $('#reviewSummary').innerHTML='<h3>Renter reputation</h3><div class="review-rating"><strong>'+esc(summary.average_rating)+'</strong> / 5 · '+esc(summary.review_count)+' review(s)</div>';
+    $('#renterReviews').innerHTML=r.reviews.length?'<div class="review-list">'+r.reviews.map(v=>'<article class="review-card"><div class="review-stars">'+('★'.repeat(Number(v.rating)))+('☆'.repeat(5-Number(v.rating)))+'</div><strong>'+esc(v.reviewer_name)+'</strong><small>'+esc(v.listing_name)+' · '+new Date(v.created_at).toLocaleDateString()+'</small><p>'+esc(v.comment||'No written comment.')+'</p></article>').join('')+'</div>':'<p>No reviews yet.</p>';
+  }catch(e){$('#reviewSummary').innerHTML='<h3>Renter reputation</h3><p>Reviews unavailable.</p>';}
+}
+async function loadBookingReview(bookingId){
+  try{return (await api('/api/bookings/'+bookingId+'/review')).review}catch{return null}
+}
+async function submitReview(bookingId){
+  const rating=prompt('Rating from 1 to 5');
+  if(rating===null)return;
+  const comment=prompt('Write your review comment (optional)')||'';
+  try{await api('/api/reviews',{method:'POST',body:{bookingId,rating:Number(rating),comment}});toast('Review submitted');await loadBookings()}catch(e){toast(e.message)}
+}
 async function loadBookings(){
   if(!state.user)return;
   try{state.bookings=await api('/api/bookings');$('#bookingSummary').innerHTML=state.bookings.length?state.bookings.map(b=>`<div class="booking-row"><div><strong>${esc(b.item)}</strong><small>${b.start_date} → ${b.end_date} · ${esc(b.status)}</small></div><span>${money(b.total)}${b.status==='pending'?` <button class="pay-booking" data-id="${b.id}">Pay</button>`:''}${b.status==='completed'?` <button class="review-booking" data-id="${b.id}">Review renter</button>`:''}</span></div>`).join(''):'<p>No bookings yet.</p>'}
