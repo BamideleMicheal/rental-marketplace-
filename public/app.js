@@ -1,4 +1,4 @@
-const state={category:'All',listings:[],user:null,bookings:[]};
+const state={category:'All',listings:[],user:null,bookings:[],cart:[]};
 const $=s=>document.querySelector(s);
 const money=n=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN',maximumFractionDigits:0}).format(Number(n||0));
 const tokenKey='rental-marketplace-token';
@@ -56,15 +56,38 @@ async function startEscrow(bookingId){
 }
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
+async function loadCart(){
+  if(!state.user){state.cart=[];updateCartBadge();return}
+  try{state.cart=await api('/api/cart');updateCartBadge();renderCart()}catch(e){toast(e.message)}
+}
+function updateCartBadge(){const n=$('#cartCount');if(n)n.textContent=state.cart.length}
+function renderCart(){
+  const el=$('#cartItems');if(!el)return;
+  if(!state.cart.length){el.innerHTML='<p>Your cart is empty. Add items from Explore.</p>';return}
+  el.innerHTML=state.cart.map(c=>`<div class="cart-item">
+    <img src="${esc(c.image)}" alt="">
+    <div class="cart-item-main"><h3>${esc(c.name)}</h3><small>${money(c.price)}/day · ${esc(c.area)}, ${esc(c.city)}</small>
+    <div class="cart-fields"><label>Start <input type="date" class="cart-start" data-id="${c.id}" value="${c.start_date}"></label>
+    <label>End <input type="date" class="cart-end" data-id="${c.id}" value="${c.end_date}"></label>
+    <label>Delivery <select class="cart-delivery" data-id="${c.id}"><option value="self-pickup" ${c.delivery_method==='self-pickup'?'selected':''}>Self pickup</option><option value="delivery-return" ${c.delivery_method==='delivery-return'?'selected':''}>Delivery + return</option><option value="delivery-only" ${c.delivery_method==='delivery-only'?'selected':''}>Delivery only</option></select></label>
+    <label class="cart-address">Address <input class="cart-address-input" data-id="${c.id}" value="${esc(c.delivery_address||'')}" placeholder="Delivery address"></label></div>
+    <div class="cart-actions"><button class="save-cart" data-id="${c.id}">Update</button><button class="remove-cart ghost" data-id="${c.id}">Remove</button></div></div></div>`).join('');
+}
 async function loadBookings(){
   if(!state.user)return;
   try{state.bookings=await api('/api/bookings');$('#bookingSummary').innerHTML=state.bookings.length?state.bookings.map(b=>`<div class="booking-row"><div><strong>${esc(b.item)}</strong><small>${b.start_date} → ${b.end_date} · ${esc(b.status)}</small></div><span>${money(b.total)}${b.status==='pending'?` <button class="pay-booking" data-id="${b.id}">Pay</button>`:''}</span></div>`).join(''):'<p>No bookings yet.</p>'}
   catch(e){toast(e.message)}
 }
-async function login(e){e.preventDefault();try{const r=await api('/api/auth/login',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Login successful');section('dashboard');await loadBookings();await loadEscrow()}catch(x){toast(x.message)}}
+async function login(e){e.preventDefault();try{const r=await api('/api/auth/login',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Login successful');section('dashboard');await loadBookings();await loadCart();await loadEscrow()}catch(x){toast(x.message)}}
 async function signup(e){e.preventDefault();try{const r=await api('/api/auth/register',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Account created');section('dashboard')}catch(x){toast(x.message)}}
 async function listItem(e){e.preventDefault();try{await api('/api/listings',{method:'POST',body:Object.fromEntries(new FormData(e.target))});toast('Listing submitted for review');e.target.reset()}catch(x){toast(x.message)}}
 async function upload(e){e.preventDefault();try{const r=await api('/api/uploads',{method:'POST',body:new FormData(e.target)});$('#imageUrl').value=r.url;toast('Image uploaded')}catch(x){toast(x.message)}}
-async function reserve(e){const b=e.target.closest('.reserve');if(!b)return;if(!state.user){toast('Please log in before reserving.');return}const startDate=prompt('Start date (YYYY-MM-DD)');const endDate=prompt('End date (YYYY-MM-DD)');if(!startDate||!endDate)return;try{await api('/api/bookings',{method:'POST',body:{listingId:b.dataset.id,startDate,endDate}});toast('Booking request created');await loadBookings();section('dashboard')}catch(x){toast(x.message)}}
+async function reserve(e){const b=e.target.closest('.add-cart');if(!b)return;if(!state.user){toast('Please log in before reserving.');return}const startDate=prompt('Start date (YYYY-MM-DD)');const endDate=prompt('End date (YYYY-MM-DD)');if(!startDate||!endDate)return;const deliveryMethod=(prompt('Delivery: self-pickup, delivery-return, or delivery-only','self-pickup')||'self-pickup').trim();let deliveryAddress='';if(deliveryMethod!=='self-pickup')deliveryAddress=prompt('Delivery address')||'';try{await api('/api/cart',{method:'POST',body:{listingId:b.dataset.id,startDate,endDate,deliveryMethod,deliveryAddress}});toast('Added to cart');await loadCart();}catch(x){toast(x.message)}}catch(x){toast(x.message)}}
 $('#bookingSummary').onclick=e=>{const b=e.target.closest('.pay-booking');if(b)startEscrow(b.dataset.id)};
-document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>section(b.dataset.section));document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.category=b.dataset.category;refresh()});$('#search').oninput=refresh;$('#stateFilter').onchange=refresh;$('#listing-grid').onclick=reserve;$('#loginForm').onsubmit=login;$('#signupForm').onsubmit=signup;$('#listing-form').onsubmit=listItem;$('#uploadForm').onsubmit=upload;$('#logoutBtn').onclick=()=>{localStorage.removeItem(tokenKey);location.reload()};try{await loadLocations();await restore();await refresh();await handlePaymentReturn()}catch(e){toast(e.message)}});
+document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>section(b.dataset.section));$('#cartNav').onclick=()=>{section('cart');loadCart()};$('#cartItems').onclick=cartActions;$('#cartCheckout').onclick=checkoutCart;document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.category=b.dataset.category;refresh()});$('#search').oninput=refresh;$('#stateFilter').onchange=refresh;$('#listing-grid').onclick=reserve;$('#loginForm').onsubmit=login;$('#signupForm').onsubmit=signup;$('#listing-form').onsubmit=listItem;$('#uploadForm').onsubmit=upload;$('#logoutBtn').onclick=()=>{localStorage.removeItem(tokenKey);location.reload()};try{await loadLocations();await restore();await refresh();await handlePaymentReturn()}catch(e){toast(e.message)}});
+
+async function cartActions(e){
+  const save=e.target.closest('.save-cart'), remove=e.target.closest('.remove-cart');
+  if(remove){try{await api('/api/cart/'+remove.dataset.id,{method:'DELETE'});await loadCart()}catch(x){toast(x.message)}return}
+  if(save){const id=save.dataset.id;const start=document.querySelector('.cart-start[data-id="'+id+'"]').value;const end=document.querySelector('.cart-end[data-id="'+id+'"]').value;const dm=document.querySelector('.cart-delivery[data-id="'+id+'"]').value;const da=document.querySelector('.cart-address-input[data-id="'+id+'"]').value;try{await api('/api/cart/'+id,{method:'PUT',body:{startDate:start,endDate:end,deliveryMethod:dm,deliveryAddress:da}});toast('Cart item updated');await loadCart()}catch(x){toast(x.message)}}}
+async function checkoutCart(){try{const r=await api('/api/cart/checkout',{method:'POST'});toast(r.message||'Bookings created');await loadCart();await loadBookings();section('dashboard')}catch(x){toast(x.message)}}
