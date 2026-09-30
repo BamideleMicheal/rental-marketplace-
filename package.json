@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "db:init": "psql \"$DATABASE_URL\" -f schema.sql"
+    "db:init": "psql \"$DATABASE_URL\" -f schema.sql",
+    "reminders": "node reminders.js"
   },
   "dependencies": {
     "express": "^4.21.2",
