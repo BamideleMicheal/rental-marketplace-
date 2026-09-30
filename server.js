@@ -290,7 +290,7 @@ app.post('/api/cart/checkout', auth, async (req,res)=>{
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
-    const cart=await client.query(`SELECT c.*,l.price,l.owner_id,l.name AS item
+    const cart=await client.query(`SELECT c.*,l.price,l.owner_id,l.name AS item,l.state,l.city,l.area
       FROM carts c JOIN listings l ON l.id=c.listing_id
       WHERE c.user_id=$1 AND l.status='active' FOR UPDATE OF l`,[req.user.id]);
     if(!cart.rowCount)throw Object.assign(new Error('Your cart is empty.'),{status:400});
