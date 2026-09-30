@@ -16,7 +16,7 @@
     <button class="nav-btn" data-section="account">Account</button>
     <button id="adminNav" class="nav-btn hidden" data-section="admin">Admin</button>
   </nav>
-  <button id="logoutBtn" class="ghost hidden">Logout</button>
+  <button id="cartNav" class="cart-button" data-section="cart" aria-label="Open cart">🛒 <span id="cartCount">0</span></button><button id="logoutBtn" class="ghost hidden">Logout</button>
 </header>
 
 <main>
@@ -37,6 +37,13 @@
     </div>
   </div>
   <div id="listing-grid" class="grid"></div>
+</section>
+
+<section id="cart" class="app-section">
+  <div class="panel">
+    <div class="cart-header"><div><h2>Your Cart</h2><p>Select rental dates separately for every item.</p></div><button id="cartCheckout" type="button">Checkout all</button></div>
+    <div id="cartItems"></div>
+  </div>
 </section>
 
 <section id="dashboard" class="app-section">
