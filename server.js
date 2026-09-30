@@ -97,6 +97,7 @@ function validDate(s) {
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
 const PAYMENT_PROVIDER = PAYSTACK_SECRET_KEY ? 'paystack' : 'manual';
+const DELIVERY_FEE = Number(process.env.DELIVERY_FEE || 0);
 
 function notify(promise) {
   Promise.resolve(promise).catch(err => console.error('Email notification failed:', err.message));
@@ -236,6 +237,90 @@ app.post('/api/uploads', auth, requireRole('lender','admin'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Image is required.' });
     res.status(201).json({ url: `/uploads/${req.file.filename}` });
   });
+});
+
+
+app.get('/api/cart', auth, async (req,res)=>{
+  const r=await pool.query(`SELECT c.*,l.name,l.category,l.price,l.image,l.state,l.city,l.area,l.description
+    FROM carts c JOIN listings l ON l.id=c.listing_id
+    WHERE c.user_id=$1 ORDER BY c.created_at DESC`,[req.user.id]);
+  res.json(r.rows);
+});
+
+app.post('/api/cart', auth, async (req,res)=>{
+  const {listingId,startDate,endDate,deliveryMethod='self-pickup',deliveryAddress=''}=req.body||{};
+  if(!listingId||!validDate(startDate)||!validDate(endDate)||startDate>=endDate)
+    return res.status(400).json({error:'Choose a valid start and end date.'});
+  if(!['self-pickup','delivery-return','delivery-only'].includes(deliveryMethod))
+    return res.status(400).json({error:'Invalid delivery method.'});
+  if(deliveryMethod!=='self-pickup'&&!String(deliveryAddress).trim())
+    return res.status(400).json({error:'Delivery address is required.'});
+  const listing=await pool.query(`SELECT * FROM listings WHERE id=$1 AND status='active'`,[listingId]);
+  if(!listing.rowCount)return res.status(404).json({error:'Listing is unavailable.'});
+  if(Number(listing.rows[0].owner_id)===Number(req.user.id))return res.status(400).json({error:'You cannot add your own listing to your cart.'});
+  const overlap=await pool.query(`SELECT 1 FROM bookings WHERE listing_id=$1 AND status IN ('pending','confirmed')
+    AND daterange(start_date,end_date,'[)') && daterange($2::date,$3::date,'[)') LIMIT 1`,[listingId,startDate,endDate]);
+  if(overlap.rowCount)return res.status(409).json({error:'Those dates are already booked.'});
+  const r=await pool.query(`INSERT INTO carts(user_id,listing_id,start_date,end_date,delivery_method,delivery_address)
+    VALUES($1,$2,$3,$4,$5,$6)
+    ON CONFLICT(user_id,listing_id) DO UPDATE SET start_date=EXCLUDED.start_date,end_date=EXCLUDED.end_date,
+    delivery_method=EXCLUDED.delivery_method,delivery_address=EXCLUDED.delivery_address,updated_at=NOW()
+    RETURNING *`,[req.user.id,listingId,startDate,endDate,deliveryMethod,String(deliveryAddress).trim()]);
+  res.status(201).json(r.rows[0]);
+});
+
+app.put('/api/cart/:id', auth, async (req,res)=>{
+  const {startDate,endDate,deliveryMethod,deliveryAddress}=req.body||{};
+  if(!validDate(startDate)||!validDate(endDate)||startDate>=endDate)return res.status(400).json({error:'Choose a valid start and end date.'});
+  if(deliveryMethod && !['self-pickup','delivery-return','delivery-only'].includes(deliveryMethod))return res.status(400).json({error:'Invalid delivery method.'});
+  const r=await pool.query(`UPDATE carts SET start_date=$1,end_date=$2,delivery_method=COALESCE($3,delivery_method),
+    delivery_address=COALESCE($4,delivery_address),updated_at=NOW()
+    WHERE id=$5 AND user_id=$6 RETURNING *`,[startDate,endDate,deliveryMethod||null,deliveryAddress??null,req.params.id,req.user.id]);
+  if(!r.rowCount)return res.status(404).json({error:'Cart item not found.'});
+  res.json(r.rows[0]);
+});
+
+app.delete('/api/cart/:id', auth, async (req,res)=>{
+  const r=await pool.query('DELETE FROM carts WHERE id=$1 AND user_id=$2 RETURNING id',[req.params.id,req.user.id]);
+  if(!r.rowCount)return res.status(404).json({error:'Cart item not found.'});
+  res.json({ok:true});
+});
+
+app.post('/api/cart/checkout', auth, async (req,res)=>{
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const cart=await client.query(`SELECT c.*,l.price,l.owner_id,l.name AS item
+      FROM carts c JOIN listings l ON l.id=c.listing_id
+      WHERE c.user_id=$1 AND l.status='active' FOR UPDATE OF l`,[req.user.id]);
+    if(!cart.rowCount)throw Object.assign(new Error('Your cart is empty.'),{status:400});
+    const created=[];
+    for(const item of cart.rows){
+      const conflict=await client.query(`SELECT 1 FROM bookings WHERE listing_id=$1 AND status IN ('pending','confirmed')
+        AND daterange(start_date,end_date,'[)') && daterange($2::date,$3::date,'[)') LIMIT 1`,
+        [item.listing_id,item.start_date,item.end_date]);
+      if(conflict.rowCount)throw Object.assign(new Error(`${item.item} is no longer available for the selected dates.`),{status:409});
+      const days=Math.max(1,Math.ceil((new Date(`${item.end_date}T00:00:00Z`)-new Date(`${item.start_date}T00:00:00Z`))/86400000));
+      const deliveryFee=item.delivery_method==='self-pickup'?0:DELIVERY_FEE*(item.delivery_method==='delivery-return'?2:1);
+      const total=Number(item.price)*days+deliveryFee;
+      const b=await client.query(`INSERT INTO bookings(listing_id,renter_id,start_date,end_date,total,status,delivery_method,delivery_address,delivery_fee)
+        VALUES($1,$2,$3,$4,$5,'pending',$6,$7,$8) RETURNING *`,
+        [item.listing_id,req.user.id,item.start_date,item.end_date,total,item.delivery_method,item.delivery_address,deliveryFee]);
+      created.push(b.rows[0]);
+      if(item.delivery_method!=='self-pickup'){
+        const pickup=`${item.area||''}, ${item.city||''}, ${item.state||''}`;
+        await client.query(`INSERT INTO deliveries(booking_id,method,pickup_address,delivery_address,tracking_code)
+          VALUES($1,$2,$3,$4,$5)`,[b.rows[0].id,item.delivery_method,pickup,item.delivery_address,`RM-D-${crypto.randomUUID().slice(0,8).toUpperCase()}`]);
+      }
+    }
+    await client.query('DELETE FROM carts WHERE user_id=$1',[req.user.id]);
+    await client.query('COMMIT');
+    res.status(201).json({bookings:created,message:`${created.length} booking(s) created from your cart.`});
+  }catch(e){
+    await client.query('ROLLBACK');
+    if(e.code==='23P01')return res.status(409).json({error:'One of the selected rental dates is already booked.'});
+    res.status(e.status||500).json({error:e.message||'Cart checkout failed.'});
+  }finally{client.release();}
 });
 
 app.get('/api/bookings', auth, async (req, res) => {
