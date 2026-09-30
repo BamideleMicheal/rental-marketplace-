@@ -156,3 +156,14 @@ CREATE TABLE IF NOT EXISTS deliveries (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS deliveries_status_idx ON deliveries(outbound_status,return_status);
+
+
+-- Idempotent email reminder tracking
+CREATE TABLE IF NOT EXISTS notification_log (
+  id BIGSERIAL PRIMARY KEY,
+  booking_id BIGINT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  notification_type TEXT NOT NULL,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(booking_id, notification_type)
+);
+CREATE INDEX IF NOT EXISTS notification_log_booking_idx ON notification_log(booking_id);
