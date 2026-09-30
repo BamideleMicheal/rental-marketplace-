@@ -376,7 +376,7 @@ app.post('/api/cart/checkout', auth, async (req,res)=>{
 
 app.get('/api/bookings', auth, async (req, res) => {
   const result = await pool.query(
-    `SELECT b.*,l.name AS item,l.state,l.city,l.area,l.price,u.name AS lender_name
+    `SELECT b.*,l.name AS item,l.state,l.city,l.area,l.price,l.owner_id AS lender_id,u.name AS lender_name
        FROM bookings b
        JOIN listings l ON l.id=b.listing_id
        JOIN users u ON u.id=l.owner_id
