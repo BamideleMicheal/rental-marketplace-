@@ -350,6 +350,21 @@ app.post('/api/cart/checkout', auth, async (req,res)=>{
     }
     await client.query('DELETE FROM carts WHERE user_id=$1',[req.user.id]);
     await client.query('COMMIT');
+    const partyRows = await pool.query(
+      `SELECT b.id AS booking_id,b.start_date,b.end_date,b.total,
+              l.name AS item,renter.name AS renter_name,renter.email AS renter_email,
+              lender.name AS lender_name,lender.email AS lender_email
+         FROM bookings b
+         JOIN listings l ON l.id=b.listing_id
+         JOIN users renter ON renter.id=b.renter_id
+         JOIN users lender ON lender.id=l.owner_id
+        WHERE b.id = ANY($1::bigint[])`,
+      [created.map(b => b.id)]
+    );
+    for(const x of partyRows.rows){
+      notify(email.bookingCreated({to:x.renter_email,name:x.renter_name,item:x.item,startDate:x.start_date,endDate:x.end_date,total:x.total}));
+      notify(email.bookingReceived({to:x.lender_email,name:x.lender_name,item:x.item,startDate:x.start_date,endDate:x.end_date,total:x.total}));
+    }
     res.status(201).json({bookings:created,message:`${created.length} booking(s) created from your cart.`});
   }catch(e){
     await client.query('ROLLBACK');
