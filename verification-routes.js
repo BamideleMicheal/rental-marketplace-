@@ -111,7 +111,7 @@ function registerVerificationRoutes(app, pool, auth, requireRole) {
         );
         await pool.query(
           `INSERT INTO user_profiles(user_id,first_name,surname,verification_status)
-           VALUES($1,'','s','submitted')
+           VALUES($1,'','', 'submitted')
            ON CONFLICT(user_id) DO UPDATE SET verification_status='submitted',updated_at=NOW()`,
           [req.user.id]
         );
