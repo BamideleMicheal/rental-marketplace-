@@ -152,9 +152,9 @@
     <input name="residentialAddress" required placeholder="Guarantor address">
     <input name="lga" placeholder="Guarantor LGA">
     <select name="state" class="state-select" required></select>
-    <input name="idType" placeholder="Guarantor ID type">
-    <input name="idNumber" placeholder="Guarantor ID number">
-    <input name="idDocument" type="file" accept="image/jpeg,image/png,image/webp,application/pdf">
+    <input name="idType" required placeholder="Guarantor ID type">
+    <input name="idNumber" required placeholder="Guarantor ID number">
+    <input name="idDocument" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
     <label><input type="checkbox" name="consentConfirmed" value="true" required> Guarantor consent has been obtained.</label>
     <button type="submit">Submit guarantor</button>
   </form>
