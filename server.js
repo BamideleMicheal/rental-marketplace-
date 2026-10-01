@@ -74,8 +74,17 @@ function auth(req, res, next) {
     if (!sig || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) throw new Error('bad signature');
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
     if (!data.exp || data.exp < Date.now()) throw new Error('expired');
-    req.user = { id: Number(data.id), role: data.role };
-    next();
+    const id = Number(data.id);
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('invalid user');
+    // The token identifies the user, but the database is the source of truth
+    // for the current role. This makes role changes effective immediately.
+    pool.query('SELECT id,name,email,role FROM users WHERE id=$1', [id])
+      .then(result => {
+        if (!result.rowCount) return res.status(401).json({ error: 'User no longer exists.' });
+        req.user = { id, role: result.rows[0].role };
+        next();
+      })
+      .catch(() => res.status(503).json({ error: 'Authentication service unavailable.' }));
   } catch {
     res.status(401).json({ error: 'Invalid or expired authentication token.' });
   }
@@ -631,32 +640,56 @@ app.post('/api/payments/webhook', async (req, res) => {
 
 app.post('/api/escrow/release', auth, requireRole('admin'), async (req, res) => {
   const { escrowId } = req.body || {};
-  const result = await pool.query(
-    `SELECT e.*,b.id AS booking_id,b.end_date,l.owner_id
-       FROM escrow_transactions e
-       JOIN bookings b ON b.id=e.booking_id
-       JOIN listings l ON l.id=b.listing_id
-      WHERE e.id=$1`, [escrowId]);
-  if (!result.rowCount) return res.status(404).json({ error: 'Escrow transaction not found.' });
-  const e = result.rows[0];
-  if (e.status !== 'funded' && e.status !== 'release_pending') {
-    return res.status(409).json({ error: `Escrow is ${e.status}; it cannot be released.` });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `SELECT e.*,b.id AS booking_id,b.end_date,b.status AS booking_status,l.owner_id
+         FROM escrow_transactions e
+         JOIN bookings b ON b.id=e.booking_id
+         JOIN listings l ON l.id=b.listing_id
+        WHERE e.id=$1
+        FOR UPDATE OF e,b`, [escrowId]);
+    if (!result.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Escrow transaction not found.' });
+    }
+    const e = result.rows[0];
+    if (e.status !== 'funded' && e.status !== 'release_pending') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `Escrow is ${e.status}; it cannot be released.` });
+    }
+    if (e.booking_status !== 'confirmed' || String(e.end_date).slice(0,10) > new Date().toISOString().slice(0,10)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Escrow cannot be released until the confirmed rental has ended.' });
+    }
+
+    const updated = await client.query(
+      `UPDATE escrow_transactions
+          SET status='released',released_at=NOW()
+        WHERE id=$1 AND status IN ('funded','release_pending')
+        RETURNING *`, [escrowId]);
+    if (!updated.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Escrow was already processed.' });
+    }
+
+    const payout = await client.query(
+      `INSERT INTO payouts(lender_id,booking_id,amount,status)
+       VALUES($1,$2,$3,'pending')
+       ON CONFLICT (booking_id) WHERE booking_id IS NOT NULL DO NOTHING
+       RETURNING *`,
+      [e.owner_id,e.booking_id,e.amount]);
+
+    await client.query(`UPDATE bookings SET status='completed' WHERE id=$1 AND status='confirmed'`, [e.booking_id]);
+    await client.query('COMMIT');
+    res.json({ escrow: updated.rows[0], payout: payout.rows[0] || null, message: 'Escrow released to the lender payout queue.' });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: 'Escrow release failed.' });
+  } finally {
+    client.release();
   }
-
-  // The release is an internal ledger state. Actual transfer to a lender requires
-  // a configured provider payout/subaccount workflow.
-  const updated = await pool.query(
-    `UPDATE escrow_transactions
-        SET status='released',released_at=NOW()
-      WHERE id=$1 RETURNING *`, [escrowId]);
-
-  await pool.query(
-    `INSERT INTO payouts(lender_id,booking_id,amount,status)
-     VALUES($1,$2,$3,'pending')`,
-    [e.owner_id,e.booking_id,e.amount]);
-
-  await pool.query(`UPDATE bookings SET status='completed' WHERE id=$1`, [e.booking_id]);
-  res.json({ escrow: updated.rows[0], message: 'Escrow released to the lender payout queue.' });
 });
 
 app.post('/api/escrow/dispute', auth, async (req, res) => {
@@ -721,6 +754,18 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+const REMINDER_INTERVAL_MS = Math.max(5 * 60 * 1000, Number(process.env.REMINDER_INTERVAL_MS || 60 * 60 * 1000));
+
 app.listen(PORT, () => {
   console.log(`Rental Marketplace running at http://localhost:${PORT}`);
+  // Render currently runs one web instance. The DB uniqueness constraint makes
+  // reminder execution idempotent if more than one instance ever runs.
+  runDueRentalNotifications()
+    .then(result => console.log(`Reminder scheduler checked ${result.checked} booking(s).`))
+    .catch(err => console.error('Initial reminder check failed:', err.message));
+  setInterval(() => {
+    runDueRentalNotifications()
+      .then(result => console.log(`Reminder scheduler checked ${result.checked} booking(s).`))
+      .catch(err => console.error('Reminder scheduler failed:', err.message));
+  }, REMINDER_INTERVAL_MS);
 });
