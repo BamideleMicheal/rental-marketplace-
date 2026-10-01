@@ -171,6 +171,10 @@ function registerVerificationRoutes(app, pool, auth, requireRole) {
         [evidence,agreement].filter(Boolean).forEach(f=>fs.unlink(f.path,()=>{}));
         return res.status(400).json({error:'Ownership type and supporting evidence are required.'});
       }
+      if(ownershipType==='authorized-agent'&&!agreement){
+        [evidence,agreement].filter(Boolean).forEach(f=>fs.unlink(f.path,()=>{}));
+        return res.status(400).json({error:'An authorization agreement is required when acting for the owner.'});
+      }
       try{
         const listing=await pool.query('SELECT id,owner_id FROM listings WHERE id=$1',[req.params.id]);
         if(!listing.rowCount||Number(listing.rows[0].owner_id)!==Number(req.user.id)){
