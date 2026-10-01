@@ -54,7 +54,6 @@ async function startEscrow(bookingId){
     await loadEscrow();
   }catch(e){toast(e.message)}
 }
-function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 async function loadCart(){
   if(!state.user){state.cart=[];updateCartBadge();return}
