@@ -28,7 +28,7 @@ async function refresh(){
 }
 async function restore(){
   if(!localStorage.getItem(tokenKey)) return;
-  try{const r=await api('/api/auth/me');state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();await loadBookings()}
+  try{const r=await api('/api/auth/me');state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();await loadBookings();await loadVerification()}
   catch{localStorage.removeItem(tokenKey)}
 }
 
