@@ -137,6 +137,17 @@ async function loadVerification(){
       }
       if(form.elements.age)form.elements.age.value=calculateAge(p.date_of_birth)||'';
     }
+    const displayName=[p.first_name,p.middle_name,p.surname].filter(Boolean).join(' ')||state.user.name||'User';
+    const card=$('#profileCard');
+    if(card){
+      $('#profileName').textContent=displayName;
+      $('#profileUserId').textContent=p.user_id||state.user.id||'—';
+      $('#profileRole').textContent=state.user.role||'—';
+      $('#profileVerification').textContent=p.verification_status||'not submitted';
+      const avatar=$('#profileAvatar');
+      if(p.profile_photo_path){avatar.src=p.profile_photo_path;avatar.classList.remove('hidden')}else{avatar.removeAttribute('src');avatar.classList.add('hidden')}
+      card.classList.remove('hidden');
+    }
     $('#verificationStatus').innerHTML='<p><strong>Identity:</strong> '+esc(p.verification_status||'not submitted')+'</p><p><strong>Guarantors:</strong> '+esc(r.guarantors?.length||0)+' · <strong>Item checks:</strong> '+esc(r.itemVerifications?.length||0)+'</p>';
   }catch(e){toast(e.message)}
 }
