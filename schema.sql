@@ -184,6 +184,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 CREATE INDEX IF NOT EXISTS reviews_reviewed_user_idx ON reviews(reviewed_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS reviews_listing_idx ON reviews(listing_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS payouts_booking_uq ON payouts(booking_id) WHERE booking_id IS NOT NULL;
 
 
 -- Identity, guarantor and item ownership verification
