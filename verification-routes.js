@@ -94,12 +94,20 @@ function registerVerificationRoutes(app, pool, auth, requireRole) {
       if (err) return res.status(400).json({ error: err.message });
       if (!req.file) return res.status(400).json({ error: 'Profile photo is required.' });
       try {
+        const existing = await pool.query(
+          'SELECT profile_photo_path FROM user_profiles WHERE user_id=$1',
+          [req.user.id]
+        );
         await pool.query(
           `INSERT INTO user_profiles(user_id,first_name,surname,profile_photo_path)
            VALUES($1,$2,$3,$4)
            ON CONFLICT(user_id) DO UPDATE SET profile_photo_path=EXCLUDED.profile_photo_path,updated_at=NOW()`,
           [req.user.id, '', '', req.file.filename]
         );
+        const oldPath = existing.rows[0]?.profile_photo_path;
+        if (oldPath && oldPath !== req.file.filename) {
+          fs.unlink(path.join(PRIVATE_DIR, path.basename(oldPath)), () => {});
+        }
         res.status(201).json({ uploaded: true });
       } catch (e) {
         fs.unlink(req.file.path, () => {});
@@ -140,10 +148,12 @@ function registerVerificationRoutes(app, pool, auth, requireRole) {
     privateUpload.fields([{name:'idDocument',maxCount:1}])(req, res, async err => {
       if (err) return res.status(400).json({ error: err.message });
       const b=req.body||{};
-      if (!requireFields(b,['firstName','surname','relationship','phone','residentialAddress']) || String(b.consentConfirmed)!=='true') {
-        return res.status(400).json({ error: 'Complete guarantor details and confirm guarantor consent.' });
-      }
       const file=req.files?.idDocument?.[0];
+      if (!requireFields(b,['firstName','surname','relationship','phone','residentialAddress','idType','idNumber']) ||
+          String(b.consentConfirmed)!=='true' || !file) {
+        if (file) fs.unlink(file.path,()=>{});
+        return res.status(400).json({ error: 'Complete guarantor details, guarantor ID information, ID document and consent.' });
+      }
       try {
         const result=await pool.query(
           `INSERT INTO guarantors
