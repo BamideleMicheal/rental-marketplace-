@@ -115,12 +115,6 @@ async function loadRenterReviews(userId){
 async function loadBookingReview(bookingId){
   try{return (await api('/api/bookings/'+bookingId+'/review')).review}catch{return null}
 }
-async function submitReview(bookingId){
-  const rating=prompt('Rating from 1 to 5');
-  if(rating===null)return;
-  const comment=prompt('Write your review comment (optional)')||'';
-  try{await api('/api/reviews',{method:'POST',body:{bookingId,rating:Number(rating),comment}});toast('Review submitted');await loadBookings()}catch(e){toast(e.message)}
-}
 
 async function loadVerification(){
   if(!state.user)return;
