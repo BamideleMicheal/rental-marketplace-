@@ -145,7 +145,19 @@ async function loadVerification(){
       $('#profileRole').textContent=state.user.role||'—';
       $('#profileVerification').textContent=p.verification_status||'not submitted';
       const avatar=$('#profileAvatar');
-      if(p.profile_photo_path){avatar.src=p.profile_photo_path;avatar.classList.remove('hidden')}else{avatar.removeAttribute('src');avatar.classList.add('hidden')}
+      if(p.profile_photo_path){
+        try{
+          const token=localStorage.getItem(tokenKey);
+          const photoResponse=await fetch('/api/profile/photo',{headers:token?{Authorization:'Bearer '+token}:{}});
+          if(!photoResponse.ok)throw new Error('Profile photo unavailable');
+          const blob=await photoResponse.blob();
+          if(avatar.dataset.objectUrl)URL.revokeObjectURL(avatar.dataset.objectUrl);
+          const objectUrl=URL.createObjectURL(blob);
+          avatar.dataset.objectUrl=objectUrl;
+          avatar.src=objectUrl;
+          avatar.classList.remove('hidden');
+        }catch{avatar.removeAttribute('src');avatar.classList.add('hidden')}
+      }else{avatar.removeAttribute('src');avatar.classList.add('hidden')}
       card.classList.remove('hidden');
     }
     $('#verificationStatus').innerHTML='<p><strong>Identity:</strong> '+esc(p.verification_status||'not submitted')+'</p><p><strong>Guarantors:</strong> '+esc(r.guarantors?.length||0)+' · <strong>Item checks:</strong> '+esc(r.itemVerifications?.length||0)+'</p>';
