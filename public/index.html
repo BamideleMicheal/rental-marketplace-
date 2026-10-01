@@ -49,6 +49,15 @@
 <section id="dashboard" class="app-section">
   <div class="panel">
     <h2>Dashboard</h2>
+    <div id="profileCard" class="profile-card hidden" aria-label="User profile">
+      <div class="profile-avatar-wrap"><img id="profileAvatar" class="profile-avatar" alt="Profile photograph"></div>
+      <div class="profile-card-info">
+        <h3 id="profileName">User</h3>
+        <p><strong>User ID:</strong> <span id="profileUserId">—</span></p>
+        <p><strong>Role:</strong> <span id="profileRole">—</span></p>
+        <p><strong>Verification:</strong> <span id="profileVerification">Not submitted</span></p>
+      </div>
+    </div>
     <p id="whoami">Sign in to see your bookings.</p>
     <div id="reputationSummary" class="panel"><h3>My Renter Reputation</h3><div id="reputationContent">Loading...</div></div><div id="bookingSummary"></div><div id="escrowSummary"></div><div id="reviewSummary"></div><div id="renterReviews"></div><div id="reviewPanel" class="panel hidden"><h3>Review a completed rental</h3><form id="reviewForm" class="form-grid"><input type="hidden" name="bookingId"><div id="reviewItem"></div><label>Rating <select name="rating" required><option value="">Select 1–5</option><option value="5">★★★★★ 5</option><option value="4">★★★★☆ 4</option><option value="3">★★★☆☆ 3</option><option value="2">★★☆☆☆ 2</option><option value="1">★☆☆☆☆ 1</option></select></label><textarea name="comment" maxlength="2000" placeholder="Describe your experience with the renter and the item..."></textarea><button type="submit">Submit review</button></form></div>
   </div>
