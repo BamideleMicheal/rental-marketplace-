@@ -576,7 +576,8 @@ app.post('/api/payments/verify', auth, async (req, res) => {
       `UPDATE escrow_transactions
           SET status='funded', funded_at=COALESCE(funded_at,NOW()),
               provider_reference=$1
-        WHERE id=$2 RETURNING *`, [payment.reference, escrow.rows[0].id]);
+        WHERE id=$2 AND status IN ('payment_pending','created')
+        RETURNING *`, [payment.reference, escrow.rows[0].id]);
     await pool.query(
       `UPDATE bookings SET status='confirmed'
         WHERE id=$1 AND status='pending'`, [escrow.rows[0].booking_id]);
@@ -585,7 +586,7 @@ app.post('/api/payments/verify', auth, async (req, res) => {
       `SELECT l.name AS item,r.name AS renter_name,r.email AS renter_email
          FROM bookings b JOIN listings l ON l.id=b.listing_id
          JOIN users r ON r.id=b.renter_id WHERE b.id=$1`, [escrow.rows[0].booking_id]);
-    if (contacts.rowCount) notify(email.paymentConfirmed({to:contacts.rows[0].renter_email,name:contacts.rows[0].renter_name,item:contacts.rows[0].item,total:updated.rows[0].amount}));
+    if (updated.rowCount && contacts.rowCount) notify(email.paymentConfirmed({to:contacts.rows[0].renter_email,name:contacts.rows[0].renter_name,item:contacts.rows[0].item,total:updated.rows[0].amount}));
     res.json({ paid: true, escrow: updated.rows[0] });
   } catch (e) {
     res.status(502).json({ error: e.message });
