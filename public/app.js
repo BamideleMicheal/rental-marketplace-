@@ -115,21 +115,36 @@ async function loadBookingReview(bookingId){
   try{return (await api('/api/bookings/'+bookingId+'/review')).review}catch{return null}
 }
 
+function calculateAge(dateValue){
+  if(!dateValue)return '';
+  const dob=new Date(dateValue+'T00:00:00');
+  if(Number.isNaN(dob.getTime()))return '';
+  const today=new Date();
+  let age=today.getFullYear()-dob.getFullYear();
+  const beforeBirthday=today.getMonth()<dob.getMonth() || (today.getMonth()===dob.getMonth() && today.getDate()<dob.getDate());
+  if(beforeBirthday)age--;
+  return age>=0?age:'';
+}
 async function loadVerification(){
   if(!state.user)return;
   try{
     const r=await api('/api/verification/me');
     const p=r.profile||{};
     const form=$('#profileForm');
-    if(form){for(const [name,key] of [['firstName','first_name'],['middleName','middle_name'],['surname','surname'],['dateOfBirth','date_of_birth'],['gender','gender'],['phone','phone'],['occupation','occupation'],['residentialAddress','residential_address'],['lga','lga'],['state','state']]){if(form.elements[name])form.elements[name].value=p[key]||'';}}
+    if(form){
+      for(const [name,key] of [['userId','user_id'],['firstName','first_name'],['middleName','middle_name'],['surname','surname'],['dateOfBirth','date_of_birth'],['gender','gender'],['phone','phone'],['occupation','occupation'],['residentialAddress','residential_address'],['lga','lga'],['state','state']]){
+        if(form.elements[name])form.elements[name].value=p[key]||'';
+      }
+      if(form.elements.age)form.elements.age.value=calculateAge(p.date_of_birth)||'';
+    }
     $('#verificationStatus').innerHTML='<p><strong>Identity:</strong> '+esc(p.verification_status||'not submitted')+'</p><p><strong>Guarantors:</strong> '+esc(r.guarantors?.length||0)+' · <strong>Item checks:</strong> '+esc(r.itemVerifications?.length||0)+'</p>';
   }catch(e){toast(e.message)}
 }
-async function saveProfile(e){e.preventDefault();try{await api('/api/profile',{method:'PUT',body:Object.fromEntries(new FormData(e.target))});toast('Personal details saved');await loadVerification()}catch(x){toast(x.message)}}
+async function saveProfile(e){e.preventDefault();try{const data=Object.fromEntries(new FormData(e.target));delete data.userId;delete data.age;await api('/api/profile',{method:'PUT',body:data});toast('Personal details saved');await loadVerification()}catch(x){toast(x.message)}}
 async function submitIdentity(e){e.preventDefault();try{await api('/api/verification/identity',{method:'POST',body:new FormData(e.target)});e.target.reset();toast('Identity verification submitted');await loadVerification()}catch(x){toast(x.message)}}
 async function submitProfilePhoto(e){e.preventDefault();try{await api('/api/profile/photo',{method:'POST',body:new FormData(e.target)});e.target.reset();toast('Profile photograph uploaded');await loadVerification()}catch(x){toast(x.message)}}
 async function submitGuarantor(e){e.preventDefault();try{const fd=new FormData(e.target);await api('/api/guarantors',{method:'POST',body:fd});e.target.reset();toast('Guarantor submitted');await loadVerification()}catch(x){toast(x.message)}}
-async function submitOwnership(e){e.preventDefault();try{const fd=new FormData(e.target), id=fd.get('listingId');fd.delete('listingId');await api('/api/listings/'+encodeURIComponent(id)+'/ownership-verification',{method:'POST',body:fd});e.target.reset();toast('Ownership verification submitted for admin review')}catch(x){toast(x.message)}}
+async function submitOwnership(e){e.preventDefault();try{const fd=new FormData(e.target), id=fd.get('listingId'), type=fd.get('ownershipType');if(!id)throw new Error('Create a listing first or enter its listing ID.');if(type==='authorized-agent'&&!fd.get('authorizationAgreement')?.name)throw new Error('An authorization agreement is required when you are acting for the owner.');fd.delete('listingId');await api('/api/listings/'+encodeURIComponent(id)+'/ownership-verification',{method:'POST',body:fd});e.target.reset();toast('Ownership verification submitted for admin review')}catch(x){toast(x.message)}}
 \nasync function loadBookings(){
   if(!state.user)return;
   try{state.bookings=await api('/api/bookings');$('#bookingSummary').innerHTML=state.bookings.length?state.bookings.map(b=>`<div class="booking-row"><div><strong>${esc(b.item)}</strong><small>${b.start_date} → ${b.end_date} · ${esc(b.status)}</small></div><span>${money(b.total)}${b.status==='pending'?` <button class="pay-booking" data-id="${b.id}">Pay</button>`:''}${b.status==='completed'?` <button class="review-booking" data-id="${b.id}">Review renter</button>`:''}</span></div>`).join(''):'<p>No bookings yet.</p>'}
@@ -137,7 +152,7 @@ async function submitOwnership(e){e.preventDefault();try{const fd=new FormData(e
 }
 async function login(e){e.preventDefault();try{const r=await api('/api/auth/login',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Login successful');section('dashboard');await loadBookings();await loadCart();await loadEscrow();await loadReputation();await loadVerification()}catch(x){toast(x.message)}}
 async function signup(e){e.preventDefault();try{const r=await api('/api/auth/register',{method:'POST',body:Object.fromEntries(new FormData(e.target))});localStorage.setItem(tokenKey,r.token);state.user=r.user;$('#logoutBtn').classList.remove('hidden');$('#whoami').textContent=`Signed in as ${r.user.name} (${r.user.role}).`;window.refreshAdminUI?.();toast('Account created');section('dashboard')}catch(x){toast(x.message)}}
-async function listItem(e){e.preventDefault();try{await api('/api/listings',{method:'POST',body:Object.fromEntries(new FormData(e.target))});toast('Listing submitted for review');e.target.reset()}catch(x){toast(x.message)}}
+async function listItem(e){e.preventDefault();try{const r=await api('/api/listings',{method:'POST',body:Object.fromEntries(new FormData(e.target))});const idField=$('#ownershipForm [name="listingId"]');if(idField)idField.value=r.id;toast('Listing submitted for review. Now submit its ownership or authorization evidence.');e.target.reset()}catch(x){toast(x.message)}}
 async function upload(e){e.preventDefault();try{const r=await api('/api/uploads',{method:'POST',body:new FormData(e.target)});$('#imageUrl').value=r.url;toast('Image uploaded')}catch(x){toast(x.message)}}
 async function addToCart(e){const b=e.target.closest('.add-cart');if(!b)return;if(!state.user){toast('Please log in before reserving.');return}const startDate=prompt('Start date (YYYY-MM-DD)');const endDate=prompt('End date (YYYY-MM-DD)');if(!startDate||!endDate)return;const deliveryMethod=(prompt('Delivery: self-pickup, delivery-return, or delivery-only','self-pickup')||'self-pickup').trim();let deliveryAddress='';if(deliveryMethod!=='self-pickup')deliveryAddress=prompt('Delivery address')||'';try{await api('/api/cart',{method:'POST',body:{listingId:b.dataset.id,startDate,endDate,deliveryMethod,deliveryAddress}});toast('Added to cart');await loadCart()}catch(x){toast(x.message)}}
 $('#bookingSummary').onclick=e=>{const b=e.target.closest('.pay-booking');if(b)startEscrow(b.dataset.id);const r=e.target.closest('.review-booking');if(r)openReview(r.dataset.id)};
