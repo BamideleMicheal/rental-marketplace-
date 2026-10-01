@@ -74,6 +74,19 @@
     <input name="image" type="file" accept="image/jpeg,image/png,image/webp" required>
     <button type="submit">Upload</button>
   </form>
+  <form id="ownershipForm" class="panel form-grid">
+    <h3>Item ownership / authorization verification</h3>
+    <p>Submit proof that you own the listed item or are authorized by its owner to rent it.</p>
+    <input name="listingId" type="number" min="1" required placeholder="Listing ID">
+    <select name="ownershipType" required>
+      <option value="">Select ownership status</option>
+      <option value="owner">I am the owner</option>
+      <option value="authorized-agent">I am authorized by the owner</option>
+    </select>
+    <input name="evidence" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+    <input name="authorizationAgreement" type="file" accept="image/jpeg,image/png,image/webp,application/pdf">
+    <button type="submit">Submit ownership verification</button>
+  </form>
 </section>
 
 <section id="admin" class="app-section"><div class="admin-header"><div><h2>Admin Dashboard</h2><p>Manage listings, users, bookings, escrow, disputes and payouts.</p></div><button id="adminRefresh" type="button">Refresh</button></div><div id="adminStats" class="admin-stats"></div><div class="admin-tabs"><button class="admin-tab active" data-admin-tab="listings">Listings</button><button class="admin-tab" data-admin-tab="users">Users</button><button class="admin-tab" data-admin-tab="bookings">Bookings</button><button class="admin-tab" data-admin-tab="escrow">Escrow</button><button class="admin-tab" data-admin-tab="disputes">Disputes</button><button class="admin-tab" data-admin-tab="payouts">Payouts</button><button class="admin-tab" data-admin-tab="verification">Verification</button></div><div id="adminContent"></div></section>
@@ -135,7 +148,13 @@
     <button type="submit">Submit guarantor</button>
   </form>
   <div id="verificationStatus"></div>
-</div>\n<div id="adminBootstrap" class="panel hidden"><h3>Initial admin setup</h3><p>Use the private admin bootstrap key once to promote this account.</p><form id="adminBootstrapForm" class="form-grid"><input id="adminBootstrapKey" type="password" placeholder="Admin bootstrap key" required><button type="submit">Enable admin</button></form></div>
+  <form id="profilePhotoForm" class="form-grid">
+    <h4>Profile photograph</h4>
+    <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required>
+    <button type="submit">Upload profile photograph</button>
+  </form>
+</div>
+<div id="adminBootstrap" class="panel hidden"><h3>Initial admin setup</h3><p>Use the private admin bootstrap key once to promote this account.</p><form id="adminBootstrapForm" class="form-grid"><input id="adminBootstrapKey" type="password" placeholder="Admin bootstrap key" required><button type="submit">Enable admin</button></form></div>
 </section>
 </main>
 <div id="toast" class="toast"></div>
