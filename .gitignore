@@ -7,3 +7,5 @@ uploads/
 .DS_Store
 Thumbs.db
 coverage/
+
+private_uploads/
