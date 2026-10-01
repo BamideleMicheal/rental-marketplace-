@@ -184,3 +184,85 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 CREATE INDEX IF NOT EXISTS reviews_reviewed_user_idx ON reviews(reviewed_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS reviews_listing_idx ON reviews(listing_id, created_at DESC);
+
+
+-- Identity, guarantor and item ownership verification
+CREATE TABLE IF NOT EXISTS user_profiles (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  first_name TEXT NOT NULL,
+  middle_name TEXT NOT NULL DEFAULT '',
+  surname TEXT NOT NULL,
+  date_of_birth DATE,
+  gender TEXT,
+  phone TEXT,
+  residential_address TEXT,
+  lga TEXT,
+  state TEXT,
+  country TEXT NOT NULL DEFAULT 'Nigeria',
+  occupation TEXT,
+  profile_photo_path TEXT,
+  verification_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (verification_status IN ('pending','submitted','verified','rejected')),
+  verified_by BIGINT REFERENCES users(id),
+  verified_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS user_profiles_state_idx ON user_profiles(state);
+
+CREATE TABLE IF NOT EXISTS user_verifications (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_type TEXT NOT NULL,
+  id_number TEXT NOT NULL,
+  id_document_path TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'submitted'
+    CHECK (status IN ('submitted','verified','rejected')),
+  reviewed_by BIGINT REFERENCES users(id),
+  reviewed_at TIMESTAMPTZ,
+  rejection_reason TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS user_verifications_user_idx ON user_verifications(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS guarantors (
+  id BIGSERIAL PRIMARY KEY,
+  renter_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  first_name TEXT NOT NULL,
+  middle_name TEXT NOT NULL DEFAULT '',
+  surname TEXT NOT NULL,
+  relationship TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  residential_address TEXT NOT NULL,
+  lga TEXT,
+  state TEXT,
+  country TEXT NOT NULL DEFAULT 'Nigeria',
+  id_type TEXT,
+  id_number TEXT,
+  id_document_path TEXT,
+  consent_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
+  status TEXT NOT NULL DEFAULT 'submitted'
+    CHECK (status IN ('submitted','verified','rejected')),
+  reviewed_by BIGINT REFERENCES users(id),
+  reviewed_at TIMESTAMPTZ,
+  rejection_reason TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS guarantors_renter_idx ON guarantors(renter_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS item_verifications (
+  id BIGSERIAL PRIMARY KEY,
+  listing_id BIGINT UNIQUE NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  lender_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ownership_type TEXT NOT NULL
+    CHECK (ownership_type IN ('owner','authorized-agent')),
+  evidence_path TEXT NOT NULL,
+  authorization_agreement_path TEXT,
+  status TEXT NOT NULL DEFAULT 'submitted'
+    CHECK (status IN ('submitted','verified','rejected')),
+  reviewed_by BIGINT REFERENCES users(id),
+  reviewed_at TIMESTAMPTZ,
+  rejection_reason TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS item_verifications_lender_idx ON item_verifications(lender_id, created_at DESC);
