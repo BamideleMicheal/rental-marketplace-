@@ -76,6 +76,19 @@ function registerVerificationRoutes(app, pool, auth, requireRole) {
     res.json({ profile: result.rows[0] });
   });
 
+  app.get('/api/profile/photo', auth, async (req, res) => {
+    try {
+      const result = await pool.query('SELECT profile_photo_path FROM user_profiles WHERE user_id=$1', [req.user.id]);
+      const filename = result.rows[0]?.profile_photo_path;
+      if (!filename) return res.sendStatus(404);
+      const filePath = path.join(PRIVATE_DIR, path.basename(filename));
+      if (!fs.existsSync(filePath)) return res.sendStatus(404);
+      return res.sendFile(filePath);
+    } catch (e) {
+      return res.status(500).json({ error: 'Profile photo could not be loaded.' });
+    }
+  });
+
   app.post('/api/profile/photo', auth, (req, res) => {
     privateUpload.single('photo')(req, res, async err => {
       if (err) return res.status(400).json({ error: err.message });
