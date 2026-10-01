@@ -756,8 +756,25 @@ app.get('*', (_req, res) => {
 
 const REMINDER_INTERVAL_MS = Math.max(5 * 60 * 1000, Number(process.env.REMINDER_INTERVAL_MS || 60 * 60 * 1000));
 
+async function verifyExternalProviders() {
+  console.log(`Email provider configured: ${Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)}`);
+  console.log(`Paystack provider configured: ${Boolean(PAYSTACK_SECRET_KEY)}`);
+  if (PAYSTACK_SECRET_KEY) {
+    try {
+      const response = await fetch('https://api.paystack.co/bank?country=nigeria&perPage=1', {
+        headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }
+      });
+      const data = await response.json().catch(() => ({}));
+      console.log(`Paystack API authentication check: ${response.ok && data.status !== false ? 'PASS' : 'FAIL'}`);
+    } catch (err) {
+      console.error('Paystack API connectivity check failed:', err.message);
+    }
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`Rental Marketplace running at http://localhost:${PORT}`);
+  verifyExternalProviders().catch(err => console.error('Provider check failed:', err.message));
   // Render currently runs one web instance. The DB uniqueness constraint makes
   // reminder execution idempotent if more than one instance ever runs.
   runDueRentalNotifications()
