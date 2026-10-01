@@ -94,7 +94,48 @@
       <button>Create account</button>
     </form>
   </div>
-<div id="adminBootstrap" class="panel hidden"><h3>Initial admin setup</h3><p>Use the private admin bootstrap key once to promote this account.</p><form id="adminBootstrapForm" class="form-grid"><input id="adminBootstrapKey" type="password" placeholder="Admin bootstrap key" required><button type="submit">Enable admin</button></form></div>
+<div id="verificationPanel" class="panel">
+  <h3>Identity & Trust Verification</h3>
+  <p>Your verification records are private and reviewed by an administrator.</p>
+  <form id="profileForm" class="form-grid">
+    <input name="firstName" required placeholder="First name">
+    <input name="middleName" placeholder="Middle name">
+    <input name="surname" required placeholder="Surname">
+    <input name="dateOfBirth" type="date" placeholder="Date of birth">
+    <select name="gender"><option value="">Gender</option><option>Male</option><option>Female</option><option>Other</option></select>
+    <input name="phone" placeholder="Phone number">
+    <input name="occupation" placeholder="Occupation">
+    <input name="residentialAddress" required placeholder="Residential address">
+    <input name="lga" placeholder="Local Government Area">
+    <select name="state" class="state-select" required></select>
+    <input name="country" value="Nigeria" readonly>
+    <button type="submit">Save personal details</button>
+  </form>
+  <form id="identityForm" class="form-grid">
+    <h4>Government identification</h4>
+    <select name="idType" required><option value="">Select ID type</option><option>National ID</option><option>NIN Slip</option><option>International Passport</option><option>Driver Licence</option><option>Voter Card</option></select>
+    <input name="idNumber" required placeholder="Identification number">
+    <input name="idDocument" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+    <button type="submit">Submit identity verification</button>
+  </form>
+  <form id="guarantorForm" class="form-grid">
+    <h4>Renter guarantor</h4>
+    <input name="firstName" required placeholder="Guarantor first name">
+    <input name="middleName" placeholder="Guarantor middle name">
+    <input name="surname" required placeholder="Guarantor surname">
+    <input name="relationship" required placeholder="Relationship to renter">
+    <input name="phone" required placeholder="Guarantor phone">
+    <input name="residentialAddress" required placeholder="Guarantor address">
+    <input name="lga" placeholder="Guarantor LGA">
+    <select name="state" class="state-select" required></select>
+    <input name="idType" placeholder="Guarantor ID type">
+    <input name="idNumber" placeholder="Guarantor ID number">
+    <input name="idDocument" type="file" accept="image/jpeg,image/png,image/webp,application/pdf">
+    <label><input type="checkbox" name="consentConfirmed" value="true" required> Guarantor consent has been obtained.</label>
+    <button type="submit">Submit guarantor</button>
+  </form>
+  <div id="verificationStatus"></div>
+</div>\n<div id="adminBootstrap" class="panel hidden"><h3>Initial admin setup</h3><p>Use the private admin bootstrap key once to promote this account.</p><form id="adminBootstrapForm" class="form-grid"><input id="adminBootstrapKey" type="password" placeholder="Admin bootstrap key" required><button type="submit">Enable admin</button></form></div>
 </section>
 </main>
 <div id="toast" class="toast"></div>
